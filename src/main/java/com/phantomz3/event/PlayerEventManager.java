@@ -44,6 +44,23 @@ public class PlayerEventManager {
 						false);
 				LifestealMod.saveRevives();
 			}
+			if (LifestealMod.eliminatedPlayers.contains(joined.getUuid())) {
+				if (config.banPlayersOnElimination) {
+					BannedPlayerList bannedList = joined.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+					BannedPlayerEntry banEntry = new BannedPlayerEntry(
+							joined.getPlayerConfigEntry(),
+							null,
+							LifestealMod.MOD_ID,
+							null,
+							LifestealMod.REVIVE_BAN_REASON
+					);
+					bannedList.add(banEntry);
+
+					joined.networkHandler.disconnect(Text.literal("You lost all your hearts!").formatted(Formatting.RED));
+				} else {
+					joined.changeGameMode(GameMode.SPECTATOR);
+				}
+			}
 		});
 	}
 
