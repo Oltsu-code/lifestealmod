@@ -6,6 +6,7 @@ import me.shedaniel.autoconfig.annotation.Config;
 @Config(name = LifestealMod.MOD_ID)
 public class ModConfig implements ConfigData {
     public int maxHeartCap = 40;
+    public boolean banPlayersOnElimination = true;
     public boolean disableEnderPearl = true;
     public boolean disableCPVP = true;
     public boolean disableTotem = true;
@@ -14,4 +15,5 @@ public class ModConfig implements ConfigData {
     public int riptideCooldown = 200; // 200 ticks = 10 seconds
     public boolean riptideCooldownEnabled = true;
     public boolean healPlayerOnWithdraw = false;
+
 }

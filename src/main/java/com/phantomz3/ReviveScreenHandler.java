@@ -1,6 +1,8 @@
 package com.phantomz3;
 
+import me.shedaniel.autoconfig.AutoConfig;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.SimpleInventory;
@@ -12,10 +14,12 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.BannedPlayerEntry;
 import net.minecraft.server.BannedPlayerList;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.world.GameMode;
 
 public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
@@ -94,9 +98,10 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 	}
 
 	private boolean attemptRevive(ServerPlayerEntity reviver, PlayerConfigEntry targetEntry) {
+		ModConfig config  = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
 		BannedPlayerList bannedList = reviver.getEntityWorld().getServer().getPlayerManager().getUserBanList();
 
-		if (!bannedList.contains(targetEntry)) {
+		if (config.banPlayersOnElimination && !bannedList.contains(targetEntry)) {
 			reviver.sendMessage(Text.literal("This player is not banned.").formatted(Formatting.RED), true);
 			return false;
 		}
@@ -106,10 +111,19 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 			return false;
 		}
 
-		// perform revive
-		bannedList.remove(targetEntry);
-		LifestealMod.pendingRevives.add(targetEntry.id());
-		LifestealMod.saveRevives();
+		MinecraftServer server = reviver.getEntityWorld().getServer();
+		ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetEntry.id());
+		if (!config.banPlayersOnElimination && target != null) { // perform immediate revive
+			target.changeGameMode(GameMode.SURVIVAL);
+			target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(6.0);
+			target.setHealth(6.0f);
+			target.sendMessage(Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN), false);
+		} else { // perform revive
+			if (config.banPlayersOnElimination) bannedList.remove(targetEntry);
+			LifestealMod.pendingRevives.add(targetEntry.id());
+			LifestealMod.saveRevives();
+		}
+
 		consumeReviveBeacon(reviver);
 
 		reviver.sendMessage(Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);

@@ -17,6 +17,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.BannedPlayerEntry;
+import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -103,15 +104,20 @@ public class LifestealMod implements ModInitializer {
 			|| player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING;
 	}
 
-	public int executeRevive(ServerCommandSource source, net.minecraft.server.PlayerConfigEntry targetEntry) {
-		var bannedList = source.getServer().getPlayerManager().getUserBanList();
+	public int executeRevive(ServerCommandSource source, PlayerConfigEntry targetEntry) {
+		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
 
-		if (!bannedList.contains(targetEntry)) {
-			source.sendError(Text.literal("This player is not banned."));
-			return 0;
+		if (config.banPlayersOnElimination) {
+			var bannedList = source.getServer().getPlayerManager().getUserBanList();
+
+			if (!bannedList.contains(targetEntry)) {
+				source.sendError(Text.literal("This player is not banned."));
+				return 0;
+			}
+
+			bannedList.remove(targetEntry);
 		}
 
-		bannedList.remove(targetEntry);
 		pendingRevives.add(targetEntry.id());
 		LifestealMod.saveRevives();
 

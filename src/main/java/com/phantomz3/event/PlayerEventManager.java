@@ -127,21 +127,26 @@ public class PlayerEventManager {
 	private void eliminatePlayer(PlayerEntity player) {
 		ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
 		serverPlayer.changeGameMode(GameMode.SPECTATOR);
-		player.setHealth(1.0f);
 		player.getInventory().dropAll();
 
-		// ban player
-		BannedPlayerList bannedList = player.getEntityWorld().getServer().getPlayerManager().getUserBanList();
-		BannedPlayerEntry banEntry = new BannedPlayerEntry(
-				player.getPlayerConfigEntry(),
-				null,
-				LifestealMod.MOD_ID,
-				null,
-				LifestealMod.REVIVE_BAN_REASON
-		);
-		bannedList.add(banEntry);
+		ModConfig config = getConfig();
 
-		serverPlayer.networkHandler.disconnect(Text.literal("You lost all your hearts!").formatted(Formatting.RED));
+		if (config.banPlayersOnElimination) {
+			BannedPlayerList bannedList = player.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+			BannedPlayerEntry banEntry = new BannedPlayerEntry(
+					player.getPlayerConfigEntry(),
+					null,
+					LifestealMod.MOD_ID,
+					null,
+					LifestealMod.REVIVE_BAN_REASON
+			);
+			bannedList.add(banEntry);
+
+			serverPlayer.networkHandler.disconnect(Text.literal("You lost all your hearts!").formatted(Formatting.RED));
+		} else {
+			setPlayerHealth(player, 3.0);
+			player.sendMessage(Text.literal("You lost all your hearts!").formatted(Formatting.RED), true);
+		}
 
 		MinecraftServer server = player.getEntityWorld().getServer();
 		new Thread(() -> { // send the message later so it comes after the death message
