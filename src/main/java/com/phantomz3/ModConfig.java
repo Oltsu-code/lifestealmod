@@ -7,6 +7,7 @@ import me.shedaniel.autoconfig.annotation.Config;
 public class ModConfig implements ConfigData {
     public int maxHeartCap = 40;
     public boolean banPlayersOnElimination = true;
+    public int heartsAfterRevive = 3;
     public boolean disableEnderPearl = true;
     public boolean disableCPVP = true;
     public boolean disableTotem = true;

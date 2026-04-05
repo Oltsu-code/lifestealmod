@@ -1,5 +1,6 @@
 package com.phantomz3;
 
+import com.mojang.authlib.GameProfile;
 import me.shedaniel.autoconfig.AutoConfig;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -20,6 +21,8 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
+
+import java.util.UUID;
 
 public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
@@ -71,10 +74,10 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
 	private void handlePlayerHeadClick(ServerPlayerEntity reviver, ItemStack playerHead, int slotId) {
 		String playerName = playerHead.get(DataComponentTypes.ITEM_NAME).getString();
-		PlayerConfigEntry targetEntry = findBannedPlayer(reviver, playerName);
+		PlayerConfigEntry targetEntry = findEliminatedPlayer(reviver, playerName);
 
 		if (targetEntry == null) {
-			reviver.sendMessage(Text.literal("Player not found in ban list.").formatted(Formatting.RED), true);
+			reviver.sendMessage(Text.literal("Player not found.").formatted(Formatting.RED), true);
 			return;
 		}
 
@@ -85,24 +88,22 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 		}
 	}
 
-	private PlayerConfigEntry findBannedPlayer(ServerPlayerEntity reviver, String playerName) {
-		BannedPlayerList bannedList = reviver.getEntityWorld().getServer().getPlayerManager().getUserBanList();
-
-		for (BannedPlayerEntry entry : bannedList.values()) {
-			if (entry.getKey().name().equalsIgnoreCase(playerName)) {
-				return entry.getKey();
+	private PlayerConfigEntry findEliminatedPlayer(ServerPlayerEntity reviver, String playerName) {
+		MinecraftServer server = reviver.getEntityWorld().getServer();
+		for (UUID uuid : LifestealMod.eliminatedPlayers) {
+			GameProfile profile = server.getApiServices().profileResolver().getProfileById(uuid).orElse(null);
+			if (profile != null && profile.name().equalsIgnoreCase(playerName)) {
+				return new PlayerConfigEntry(profile);
 			}
 		}
-
 		return null;
 	}
 
 	private boolean attemptRevive(ServerPlayerEntity reviver, PlayerConfigEntry targetEntry) {
-		ModConfig config  = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
-		BannedPlayerList bannedList = reviver.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
 
-		if (config.banPlayersOnElimination && !bannedList.contains(targetEntry)) {
-			reviver.sendMessage(Text.literal("This player is not banned.").formatted(Formatting.RED), true);
+		if (!LifestealMod.eliminatedPlayers.contains(targetEntry.id())) {
+			reviver.sendMessage(Text.literal("This player is not eliminated.").formatted(Formatting.RED), true);
 			return false;
 		}
 
@@ -113,17 +114,24 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
 		MinecraftServer server = reviver.getEntityWorld().getServer();
 		ServerPlayerEntity target = server.getPlayerManager().getPlayer(targetEntry.id());
-		if (!config.banPlayersOnElimination && target != null) { // perform immediate revive
+
+		if (target != null) {
 			target.changeGameMode(GameMode.SURVIVAL);
-			target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(6.0);
-			target.setHealth(6.0f);
+			target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(config.heartsAfterRevive * 2.0f);
+			target.setHealth(config.heartsAfterRevive * 2.0f);
 			target.sendMessage(Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN), false);
-		} else { // perform revive
-			if (config.banPlayersOnElimination) bannedList.remove(targetEntry);
+		} else {
 			LifestealMod.pendingRevives.add(targetEntry.id());
 			LifestealMod.saveRevives();
 		}
 
+		if (config.banPlayersOnElimination) {
+			var bannedList = server.getPlayerManager().getUserBanList();
+			bannedList.remove(targetEntry);
+		}
+
+		LifestealMod.eliminatedPlayers.remove(targetEntry.id());
+		LifestealMod.saveEliminated();
 		consumeReviveBeacon(reviver);
 
 		reviver.sendMessage(Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);

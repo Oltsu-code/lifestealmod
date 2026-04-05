@@ -1,14 +1,17 @@
 package com.phantomz3.event;
 
+import com.mojang.authlib.GameProfile;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ProfileComponent;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -22,6 +25,9 @@ import com.phantomz3.LifestealMod;
 import com.phantomz3.ModConfig;
 import com.phantomz3.ReviveScreenHandler;
 import me.shedaniel.autoconfig.AutoConfig;
+
+import java.util.Optional;
+import java.util.UUID;
 
 public class ItemEventManager {
 
@@ -136,19 +142,17 @@ public class ItemEventManager {
 
 	private void openReviveGUI(ServerPlayerEntity player) {
 		SimpleInventory inventory = new SimpleInventory(27);
-		BannedPlayerList bannedList = player.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+		MinecraftServer server = player.getEntityWorld().getServer();
 
-		bannedList.values().forEach(entry -> {
-			if (LifestealMod.validateLifestealBan(entry)) {
-				ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
-				playerHead.set(DataComponentTypes.ITEM_NAME, Text.literal(entry.getKey().name()));
+		for (UUID uuid : LifestealMod.eliminatedPlayers) {
+			GameProfile profile = server.getApiServices().profileResolver().getProfileById(uuid).orElse(null);
+			if (profile == null) continue;
 
-				NbtCompound nbt = new NbtCompound();
-				nbt.putString("SkullOwner", entry.getKey().name());
-				playerHead.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
-				inventory.addStack(playerHead);
-			}
-		});
+			ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
+			playerHead.set(DataComponentTypes.PROFILE, ProfileComponent.ofStatic(profile));
+			playerHead.set(DataComponentTypes.ITEM_NAME, Text.literal(profile.name()));
+			inventory.addStack(playerHead);
+		}
 
 		for (int i = 0; i < inventory.size(); i++) {
 			if (inventory.getStack(i).isEmpty()) {

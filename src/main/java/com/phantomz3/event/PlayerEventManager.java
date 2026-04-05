@@ -32,10 +32,12 @@ public class PlayerEventManager {
 	}
 
 	private void registerPlayerJoinEvent() {
+		ModConfig config = getConfig();
+
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ServerPlayerEntity joined = handler.player;
 			if (LifestealMod.pendingRevives.remove(joined.getUuid())) {
-				setPlayerHealth(joined, 3.0);
+				setPlayerHealth(joined, config.heartsAfterRevive);
 				joined.changeGameMode(GameMode.SURVIVAL);
 				joined.sendMessage(
 						Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN),
@@ -144,9 +146,12 @@ public class PlayerEventManager {
 
 			serverPlayer.networkHandler.disconnect(Text.literal("You lost all your hearts!").formatted(Formatting.RED));
 		} else {
-			setPlayerHealth(player, 3.0);
+			setPlayerHealth(player, config.heartsAfterRevive);
 			player.sendMessage(Text.literal("You lost all your hearts!").formatted(Formatting.RED), true);
 		}
+
+		LifestealMod.eliminatedPlayers.add(player.getUuid());
+		LifestealMod.saveEliminated();
 
 		MinecraftServer server = player.getEntityWorld().getServer();
 		new Thread(() -> { // send the message later so it comes after the death message

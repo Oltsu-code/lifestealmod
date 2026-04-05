@@ -1,9 +1,11 @@
 package com.phantomz3.command;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.datafixers.util.Either;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -19,8 +21,13 @@ import net.minecraft.util.Formatting;
 import com.phantomz3.LifestealMod;
 import com.phantomz3.ModConfig;
 import me.shedaniel.autoconfig.AutoConfig;
+import net.minecraft.util.UserCache;
+import net.minecraft.world.GameMode;
 
 import java.util.Collection;
+import java.util.UUID;
+
+import static com.phantomz3.LifestealMod.*;
 
 public class LifestealCommands {
 
@@ -60,9 +67,10 @@ public class LifestealCommands {
 							.then(CommandManager.argument("player", StringArgumentType.string())
 									.suggests((context, builder) -> {
 										MinecraftServer server = context.getSource().getServer();
-										for (BannedPlayerEntry entry : server.getPlayerManager().getUserBanList().values()) {
-											if (LifestealMod.validateLifestealBan(entry)) {
-												builder.suggest(entry.getKey().name());
+										for (UUID uuid : LifestealMod.eliminatedPlayers) {
+											GameProfile profile = server.getApiServices().profileResolver().getProfileById(uuid).orElse(null);
+											if (profile != null) {
+												builder.suggest(profile.name());
 											}
 										}
 										return builder.buildFuture();
@@ -165,11 +173,19 @@ public class LifestealCommands {
 		String playerName = StringArgumentType.getString(context, "player");
 		ServerCommandSource source = context.getSource();
 		MinecraftServer server = source.getServer();
+		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
+
+		System.out.println("Eliminated Players: " + eliminatedPlayers);
 
 		PlayerConfigEntry targetEntry = null;
-		for (BannedPlayerEntry entry : server.getPlayerManager().getUserBanList().values()) {
-			if (entry.getKey().name().equalsIgnoreCase(playerName) && LifestealMod.validateLifestealBan(entry)) {
-				targetEntry = entry.getKey();
+
+		for (UUID uuid : LifestealMod.eliminatedPlayers) {
+			GameProfile profile = server.getApiServices().profileResolver().getProfileByName(playerName).orElse(null);
+			System.out.println("Profile: " + profile);
+			System.out.println("PlayerName: " + playerName);
+			if (profile != null && profile.name().equalsIgnoreCase(playerName)) {
+				targetEntry = new PlayerConfigEntry(profile);
+				System.out.println("Target Entry: " + targetEntry.name() + " " + targetEntry.id());
 				break;
 			}
 		}
@@ -179,7 +195,40 @@ public class LifestealCommands {
 			return 0;
 		}
 
-		return mod.executeRevive(source, targetEntry);
+		return executeRevive(source, targetEntry);
+	}
+
+	public int executeRevive(ServerCommandSource source, PlayerConfigEntry targetEntry) {
+		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
+
+		if (!eliminatedPlayers.contains(targetEntry.id())) {
+			source.sendError(Text.literal("This player is not eliminated."));
+			return 0;
+		}
+
+		if (config.banPlayersOnElimination) {
+			var bannedList = source.getServer().getPlayerManager().getUserBanList();
+			bannedList.remove(targetEntry);
+
+			pendingRevives.add(targetEntry.id());
+		} else {
+			ServerPlayerEntity target = source.getServer().getPlayerManager().getPlayer(targetEntry.id());
+			if (target != null) {
+				target.changeGameMode(GameMode.SURVIVAL);
+				target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(config.heartsAfterRevive * 2.0f);
+				target.setHealth(config.heartsAfterRevive * 2.0f);
+				target.sendMessage(Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN), false);
+			} else {
+				pendingRevives.add(targetEntry.id());
+			}
+		}
+
+		eliminatedPlayers.remove(targetEntry.id());
+		saveEliminated();
+		saveRevives();
+
+		source.sendFeedback(() -> Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
+		return 1;
 	}
 
 	private int executeViewRecipes(CommandContext<ServerCommandSource> context) {

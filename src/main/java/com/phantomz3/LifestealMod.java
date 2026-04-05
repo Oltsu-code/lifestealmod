@@ -17,11 +17,14 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.BannedPlayerEntry;
+import net.minecraft.server.BannedPlayerList;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.world.GameMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +37,9 @@ public class LifestealMod implements ModInitializer {
 	public static final String MOD_ID = "lifestealmod";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 	public static final Set<UUID> pendingRevives = new HashSet<>();
+	public static final Set<UUID> eliminatedPlayers = new HashSet<>();
 	private static final Path REVIVE_FILE = Path.of("lifesteal_revives.txt");
+	private static final Path ELIMINATED_FILE = Path.of("lifesteal_eliminated.txt");
 
 	public static final String REVIVE_BAN_REASON = "Losing all hearts ban";
 	private static final String HEART_ITEM_NAME = "Heart";
@@ -56,6 +61,7 @@ public class LifestealMod implements ModInitializer {
 		lifeStealCommands.register();
 
 		loadRevives();
+		loadEliminated();
 	}
 
 	private void registerConfig() {
@@ -89,40 +95,19 @@ public class LifestealMod implements ModInitializer {
 
 	public boolean isHeartItem(ItemStack stack) {
 		return stack.getItem() == Items.NETHER_STAR
-			&& stack.contains(DataComponentTypes.ITEM_NAME)
-			&& stack.get(DataComponentTypes.ITEM_NAME).getString().equals(HEART_ITEM_NAME);
+				&& stack.contains(DataComponentTypes.ITEM_NAME)
+				&& stack.get(DataComponentTypes.ITEM_NAME).getString().equals(HEART_ITEM_NAME);
 	}
 
 	public boolean isReviveBeacon(ItemStack stack) {
 		return stack.getItem() == Items.BEACON
-			&& stack.hasGlint()
-			&& stack.getName().getString().equals(REVIVE_BEACON_NAME);
+				&& stack.hasGlint()
+				&& stack.getName().getString().equals(REVIVE_BEACON_NAME);
 	}
 
 	public boolean isTotemEquipped(PlayerEntity player) {
 		return player.getMainHandStack().getItem() == Items.TOTEM_OF_UNDYING
-			|| player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING;
-	}
-
-	public int executeRevive(ServerCommandSource source, PlayerConfigEntry targetEntry) {
-		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
-
-		if (config.banPlayersOnElimination) {
-			var bannedList = source.getServer().getPlayerManager().getUserBanList();
-
-			if (!bannedList.contains(targetEntry)) {
-				source.sendError(Text.literal("This player is not banned."));
-				return 0;
-			}
-
-			bannedList.remove(targetEntry);
-		}
-
-		pendingRevives.add(targetEntry.id());
-		LifestealMod.saveRevives();
-
-		source.sendFeedback(() -> Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
-		return 1;
+				|| player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING;
 	}
 
 	public static void saveRevives() {
@@ -144,6 +129,28 @@ public class LifestealMod implements ModInitializer {
 			}
 		} catch (IOException e) {
 			LOGGER.error("Failed to load pending revives", e);
+		}
+	}
+
+	public static void saveEliminated() {
+		try {
+			Files.writeString(ELIMINATED_FILE,
+					eliminatedPlayers.stream().map(UUID::toString).collect(Collectors.joining("\n")));
+		} catch (IOException e) {
+			LOGGER.error("Failed to save eliminated players", e);
+		}
+	}
+
+	public static void loadEliminated() {
+		if (!Files.exists(ELIMINATED_FILE)) return;
+		try {
+			String content = Files.readString(ELIMINATED_FILE);
+			if (content.isBlank()) return;
+			for (String line : content.split("\n")) {
+				eliminatedPlayers.add(UUID.fromString(line.trim()));
+			}
+		} catch (IOException e) {
+			LOGGER.error("Failed to load eliminated players", e);
 		}
 	}
 
@@ -196,7 +203,7 @@ public class LifestealMod implements ModInitializer {
 	}
 
 	private void placeRecipeItems(SimpleInventory inventory, String[] pattern, int startRow, int startCol,
-		ItemStack raw, ItemStack netherite, ItemStack star, ItemStack beacon) {
+								  ItemStack raw, ItemStack netherite, ItemStack star, ItemStack beacon) {
 		for (int i = 0; i < pattern.length; i++) {
 			String row = pattern[i];
 			for (int j = 0; j < row.length(); j++) {
@@ -216,5 +223,3 @@ public class LifestealMod implements ModInitializer {
 		}
 	}
 }
-
-
