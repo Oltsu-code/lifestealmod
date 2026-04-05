@@ -1,7 +1,17 @@
 package com.phantomz3;
 
-import java.util.Collection;
+import java.util.*;
 
+import com.mojang.authlib.GameProfile;
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.item.Item;
+import net.minecraft.server.BannedPlayerEntry;
+import net.minecraft.server.BannedPlayerList;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.PlayerConfigEntry;
+import net.minecraft.world.World;
+import org.joml.Math;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,11 +50,12 @@ import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
-import net.minecraft.world.GameRules;
 
 public class LifestealMod implements ModInitializer {
 	public static final String MOD_ID = "lifestealmod";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+	public static final Set<UUID> pendingRevives = new HashSet<>();
 
 	@Override
 	public void onInitialize() {
@@ -63,6 +74,16 @@ public class LifestealMod implements ModInitializer {
 	}
 
 	private void registerEvents() {
+		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			ServerPlayerEntity joined = handler.player;
+			if (pendingRevives.remove(joined.getUuid())) {
+				joined.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(6.0);
+				joined.setHealth(6.0f);
+				joined.changeGameMode(GameMode.SURVIVAL);
+				joined.sendMessage(Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN), false);
+			}
+		});
+
 		// player death and drop heart
 		ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
 			if (entity instanceof PlayerEntity) {
@@ -107,7 +128,7 @@ public class LifestealMod implements ModInitializer {
 				playerMaxHealth = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
 
 				if (playerMaxHealth <= 1.0) {
-					ServerWorld serverWorld = (ServerWorld) player.getWorld();
+					ServerWorld serverWorld = (ServerWorld) player.getEntityWorld();
 					((ServerPlayerEntity) player).changeGameMode(GameMode.SPECTATOR);
 					player.sendMessage(
 							Text.literal("You lost all your hearts! You are now in spectator mode!")
@@ -116,11 +137,17 @@ public class LifestealMod implements ModInitializer {
 
 					player.setHealth(1.0f);
 
-					if (!serverWorld.getGameRules().getBoolean(GameRules.KEEP_INVENTORY)) {
-						player.getInventory().dropAll();
-					}
+					player.getInventory().dropAll();
 
-					player.getServer().getPlayerManager().broadcast(
+					// ban the player
+					BannedPlayerList bannedPlayerList = player.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+					BannedPlayerEntry banEntry = new BannedPlayerEntry(player.getPlayerConfigEntry(),
+							(Date) null, "LifestealMod", (Date) null, "Losing all hearts ban");
+					bannedPlayerList.add(banEntry);
+
+					((ServerPlayerEntity) player).networkHandler.disconnect(Text.literal("You lost all your hearts!"));
+
+					player.getEntityWorld().getServer().getPlayerManager().broadcast(
 							Text.literal("→ " + player.getDisplayName().getString()
 									+ " has lost all of his hearts and is eliminated!")
 									.formatted(Formatting.RED),
@@ -163,7 +190,7 @@ public class LifestealMod implements ModInitializer {
 				return ActionResult.PASS;
 			});
 			UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-				Boolean playerInNether = world.getDimension().respawnAnchorWorks();
+				Boolean playerInNether = world.getRegistryKey() == World.NETHER;
 				if (playerInNether
 						&& world.getBlockState(hitResult.getBlockPos()).getBlock() instanceof RespawnAnchorBlock) {
 					return ActionResult.PASS;
@@ -292,7 +319,7 @@ public class LifestealMod implements ModInitializer {
 
 		if (config.riptideCooldownEnabled) {
 			UseItemCallback.EVENT.register((player, world, hand) -> {
-				if (world.isClient) {
+				if (world.isClient()) {
 					return ActionResult.PASS; // Client-side, pass through
 				}
 
@@ -357,15 +384,16 @@ public class LifestealMod implements ModInitializer {
 					// Create a simple 9-slot chest inventory
 					SimpleInventory inventory = new SimpleInventory(27);
 
-					// Fill the inventory with player heads of player who are dead
-					serverPlayer.getServer().getPlayerManager().getPlayerList().forEach(p -> {
-						if (p.getHealth() <= 1.0f) {
+					BannedPlayerList deadPlayers = serverPlayer.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+
+					serverPlayer.getEntityWorld().getServer().getPlayerManager().getUserBanList().values().forEach(deadPlayer -> {
+						if (deadPlayer.getReason() != null && deadPlayer.getReason().equals("Losing all hearts ban")) {
 							ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
 							// not using nbt because it is not supported in 1.21 using component system
-							playerHead.set(DataComponentTypes.ITEM_NAME, Text.literal(p.getName().getString()));
+							playerHead.set(DataComponentTypes.ITEM_NAME, Text.literal(deadPlayer.getKey().name()));
 
 							NbtCompound nbtCompound = new NbtCompound();
-							nbtCompound.putString("SkullOwner", p.getName().getString());
+							nbtCompound.putString("SkullOwner", deadPlayer.getKey().name());
 							NbtComponent nbtComponent = NbtComponent.of(nbtCompound);
 							playerHead.set(DataComponentTypes.CUSTOM_DATA, nbtComponent);
 							inventory.addStack(playerHead);
@@ -453,7 +481,7 @@ public class LifestealMod implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(CommandManager.literal("lifesteal")
 					.then(CommandManager.literal("withdraw")
-							.then(CommandManager.argument("amount", IntegerArgumentType.integer(0))
+							.then(CommandManager.argument("amount", IntegerArgumentType.integer(1))
 									.executes(context -> {
 										ServerCommandSource source = context.getSource();
 										ServerPlayerEntity player = source.getPlayer();
@@ -470,6 +498,15 @@ public class LifestealMod implements ModInitializer {
 										}
 
 										if (playerMaxHealth >= amount * 2.0) {
+											ItemStack heartStack = createCustomNetherStar("Heart");
+											heartStack.setCount(amount);
+
+											if (!player.getInventory().insertStack(heartStack)) {
+												player.sendMessage(Text.literal("Your inventory is full! Cannot withdraw heart.")
+														.formatted(Formatting.RED), true);
+												return 0;
+											}
+
 											double newMaxHealth = playerMaxHealth - amount * 2.0;
 											// store current health
 											double playerCurrentHealth = player.getHealth();
@@ -488,10 +525,6 @@ public class LifestealMod implements ModInitializer {
 												}
 											}
 
-											ItemStack heartStack = createCustomNetherStar("Heart");
-											heartStack.setCount(amount);
-											player.giveItemStack(heartStack);
-
 											player.sendMessage(
 													Text.literal("You have successfully withdrawn the heart!")
 															.formatted(Formatting.GREEN),
@@ -504,7 +537,7 @@ public class LifestealMod implements ModInitializer {
 										return amount;
 									})))
 						.then(CommandManager.literal("take")
-							.requires(source -> source.hasPermissionLevel(2))
+							.requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
 							.then(CommandManager.argument("targets", EntityArgumentType.players())
 										.then(CommandManager.argument("amount", IntegerArgumentType.integer(0))
 												.executes(context -> {
@@ -527,7 +560,7 @@ public class LifestealMod implements ModInitializer {
 													return targets.size();
 												}))))
 						.then(CommandManager.literal("set")
-							.requires(source -> source.hasPermissionLevel(2))
+							.requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
 							.then(CommandManager.argument("targets", EntityArgumentType.players())
 										.then(CommandManager.argument("amount", IntegerArgumentType.integer(0))
 												.executes(context -> {
@@ -549,7 +582,7 @@ public class LifestealMod implements ModInitializer {
 													return targets.size();
 												}))))
 					.then(CommandManager.literal("give")
-							.requires(source -> source.hasPermissionLevel(2))
+							.requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
 							.then(CommandManager.argument("targets", EntityArgumentType.players())
 									.then(CommandManager.argument("amount", IntegerArgumentType.integer(0))
 											.executes(context -> {
@@ -580,7 +613,7 @@ public class LifestealMod implements ModInitializer {
 					.then(CommandManager.argument("player", EntityArgumentType.player())
 							.executes(context -> {
 								return executeRevive(context.getSource(),
-										EntityArgumentType.getPlayer(context, "player"), false);
+										EntityArgumentType.getPlayer(context, "player").getPlayerConfigEntry());
 							})));
 
 			// Registering /lifesteal revive [target] to do the same as /revive
@@ -589,7 +622,7 @@ public class LifestealMod implements ModInitializer {
 							.then(CommandManager.argument("player", EntityArgumentType.player())
 									.executes(context -> {
 										return executeRevive(context.getSource(),
-												EntityArgumentType.getPlayer(context, "player"), false);
+												EntityArgumentType.getPlayer(context, "player").getPlayerConfigEntry());
 									}))));
 		});
 	}
@@ -599,58 +632,54 @@ public class LifestealMod implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(CommandManager.literal("lifesteal")
 					.then(CommandManager.literal("oprevive")
-							.requires(source -> source.hasPermissionLevel(2)) // Only allow OPs to use this command
-							.then(CommandManager.argument("player", EntityArgumentType.player())
+							.requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
+							.then(CommandManager.argument("player", StringArgumentType.string())
+									.suggests((context, builder) -> {
+										MinecraftServer server = context.getSource().getServer();
+										for (BannedPlayerEntry entry : server.getPlayerManager().getUserBanList().values()) {
+											if (entry.getReason() != null && entry.getReason().equals("Losing all hearts ban")) {
+												builder.suggest(entry.getKey().name());
+											}
+										}
+										return builder.buildFuture();
+									})
 									.executes(context -> {
-										return executeRevive(context.getSource(),
-												EntityArgumentType.getPlayer(context, "player"), true);
-									}))));
+										String playerName = StringArgumentType.getString(context, "player");
+										MinecraftServer server = context.getSource().getServer();
+
+										PlayerConfigEntry targetEntry = null;
+										for (BannedPlayerEntry entry : server.getPlayerManager().getUserBanList().values()) {
+											if (entry.getKey().name().equalsIgnoreCase(playerName)
+													&& entry.getReason() != null
+													&& entry.getReason().equals("Losing all hearts ban")) {
+												targetEntry = entry.getKey();
+												break;
+											}
+										}
+
+										if (targetEntry == null) {
+											context.getSource().sendError(Text.literal(playerName + " is not a dead player."));
+											return 0;
+										}
+
+										return executeRevive(context.getSource(), targetEntry);
+									}))
+					));
 		});
 	}
 
-	private int executeRevive_(ServerPlayerEntity player, ServerPlayerEntity target, boolean isOpRevive) {
-		Inventory inventory = player.getInventory();
+	private int executeRevive(ServerCommandSource source, PlayerConfigEntry targetEntry) {
+		BannedPlayerList bannedPlayerList = source.getServer().getPlayerManager().getUserBanList();
 
-		// If the player is reviving themselves or a player who is not dead, return 0
-		if (player == target || target.getHealth() > 2.0f) {
-			player.sendMessage(Text.literal("You cannot revive this player!").formatted(Formatting.RED), true);
+		if (!bannedPlayerList.contains(targetEntry)) {
+			source.sendError(Text.literal("This player is not banned."));
 			return 0;
 		}
 
-		double currentMaxHealth = target.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
-		double newMaxHealth = Math.max(2.0, currentMaxHealth + 8.0); // 20 hearts = 40 health
+		bannedPlayerList.remove(targetEntry);
+		pendingRevives.add(targetEntry.id());
 
-		target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
-		target.setHealth((float) newMaxHealth); // Set player's health to the new max health
-
-		// changing the player's gamemode to survival
-		target.changeGameMode(GameMode.SURVIVAL);
-		player.sendMessage(Text.literal("Player revived successfully!").formatted(Formatting.GREEN),
-				true);
-		return 1;
-	}
-
-	// Extracted method for revive logic
-	private int executeRevive(ServerCommandSource source, ServerPlayerEntity target, boolean isOpRevive) {
-		ServerPlayerEntity player = source.getPlayer();
-		Inventory inventory = player.getInventory();
-
-		// If the player is reviving themselves or a player who is not dead, return 0
-		if (player == target || target.getHealth() > 2.0f) {
-			player.sendMessage(Text.literal("You cannot revive this player!").formatted(Formatting.RED), true);
-			return 0;
-		}
-
-		double currentMaxHealth = target.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
-		double newMaxHealth = Math.max(2.0, currentMaxHealth + 8.0); // 20 hearts = 40 health
-
-		target.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
-		target.setHealth((float) newMaxHealth); // Set player's health to the new max health
-
-		// changing the player's gamemode to survival
-		target.changeGameMode(GameMode.SURVIVAL);
-		player.sendMessage(Text.literal("Player revived successfully!").formatted(Formatting.GREEN),
-				true);
+		source.sendFeedback(() -> Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
 		return 1;
 	}
 
