@@ -7,6 +7,7 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.BannedPlayerEntry;
 import net.minecraft.server.BannedPlayerList;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.world.GameMode;
 import net.minecraft.text.Text;
@@ -19,8 +20,6 @@ import me.shedaniel.autoconfig.AutoConfig;
 public class PlayerEventManager {
 
 	private final LifestealMod mod;
-	private static final double HEART_VALUE = 2.0;
-	private static final double MIN_HEALTH = 2.0;
 
 	public PlayerEventManager(LifestealMod mod) {
 		this.mod = mod;
@@ -62,7 +61,7 @@ public class PlayerEventManager {
 			handlePlayerKill(player, attacker, config);
 			handlePlayerDeath(player, config);
 
-			return false;
+			return true;
 		});
 	}
 
@@ -113,14 +112,15 @@ public class PlayerEventManager {
 	}
 
 	private void handlePlayerDeath(PlayerEntity player, ModConfig config) {
-		mod.decreasePlayerHealth(player);
-		player.sendMessage(Text.literal("You lost a heart!").formatted(Formatting.RED), true);
-
 		double maxHealth = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
 
-		if (maxHealth <= MIN_HEALTH) {
+		if (maxHealth <= 2.0) {
 			eliminatePlayer(player);
+			return;
 		}
+
+		mod.decreasePlayerHealth(player);
+		player.sendMessage(Text.literal("You lost a heart!").formatted(Formatting.RED), true);
 	}
 
 	private void eliminatePlayer(PlayerEntity player) {
@@ -140,19 +140,20 @@ public class PlayerEventManager {
 		);
 		bannedList.add(banEntry);
 
-		player.sendMessage(
-				Text.literal("You lost all your hearts! You are now in spectator mode!").formatted(Formatting.GRAY),
-				true);
+		serverPlayer.networkHandler.disconnect(Text.literal("You lost all your hearts!").formatted(Formatting.RED));
 
-		serverPlayer.networkHandler.disconnect(Text.literal("You lost all your hearts!"));
-
-		player.getEntityWorld().getServer().getPlayerManager().broadcast(
-				Text.literal("→ " + player.getDisplayName().getString() + " has lost all of his hearts and is eliminated!").formatted(Formatting.RED),
-				false);
+		MinecraftServer server = player.getEntityWorld().getServer();
+		new Thread(() -> { // send the message later so it comes after the death message
+			try { Thread.sleep(100); } catch (InterruptedException e) {}
+			server.getPlayerManager().broadcast(
+					Text.literal("→ " + player.getDisplayName().getString() +
+						" has lost all of his hearts and is eliminated!").formatted(Formatting.RED),
+					false);
+		}).start();
 	}
 
 	private void setPlayerHealth(PlayerEntity player, double hearts) {
-		double maxHealth = Math.max(MIN_HEALTH, hearts * HEART_VALUE);
+		double maxHealth = Math.max(2.0, hearts * 2.0);
 		player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(maxHealth);
 		player.setHealth((float) maxHealth);
 	}
