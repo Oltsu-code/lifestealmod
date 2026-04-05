@@ -139,7 +139,7 @@ public class ItemEventManager {
 		BannedPlayerList bannedList = player.getEntityWorld().getServer().getPlayerManager().getUserBanList();
 
 		bannedList.values().forEach(entry -> {
-			if (LifestealMod.REVIVE_BAN_REASON.equals(entry.getReason())) {
+			if (LifestealMod.validateLifestealBan(entry)) {
 				ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
 				playerHead.set(DataComponentTypes.ITEM_NAME, Text.literal(entry.getKey().name()));
 

@@ -156,7 +156,7 @@ public class LifestealMod implements ModInitializer {
 				Text.of("View Recipes")));
 	}
 
-	public boolean validateLifestealBan(BannedPlayerEntry entry) {
+	public static boolean validateLifestealBan(BannedPlayerEntry entry) {
 		if (entry.getReason().equals(REVIVE_BAN_REASON) && entry.getSource().equals(MOD_ID)) return true;
 		return false;
 	}

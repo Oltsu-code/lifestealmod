@@ -61,7 +61,7 @@ public class LifestealCommands {
 									.suggests((context, builder) -> {
 										MinecraftServer server = context.getSource().getServer();
 										for (BannedPlayerEntry entry : server.getPlayerManager().getUserBanList().values()) {
-											if (entry.getReason() != null && entry.getReason().equals(LifestealMod.REVIVE_BAN_REASON) && entry.getSource().equals(LifestealMod.MOD_ID)) {
+											if (LifestealMod.validateLifestealBan(entry)) {
 												builder.suggest(entry.getKey().name());
 											}
 										}
@@ -168,9 +168,7 @@ public class LifestealCommands {
 
 		PlayerConfigEntry targetEntry = null;
 		for (BannedPlayerEntry entry : server.getPlayerManager().getUserBanList().values()) {
-			if (entry.getKey().name().equalsIgnoreCase(playerName)
-					&& entry.getReason().equals(LifestealMod.MOD_ID)
-					&& entry.getReason().equals(LifestealMod.REVIVE_BAN_REASON)) {
+			if (entry.getKey().name().equalsIgnoreCase(playerName) && LifestealMod.validateLifestealBan(entry)) {
 				targetEntry = entry.getKey();
 				break;
 			}
