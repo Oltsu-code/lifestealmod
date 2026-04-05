@@ -208,9 +208,13 @@ public class LifestealCommands {
 
 		if (config.banPlayersOnElimination) {
 			var bannedList = source.getServer().getPlayerManager().getUserBanList();
-			bannedList.remove(targetEntry);
-
-			pendingRevives.add(targetEntry.id());
+			if (validateLifestealBan(source.getServer(), targetEntry)) {
+				bannedList.remove(targetEntry);
+				pendingRevives.add(targetEntry.id());
+			} else {
+				source.sendError(Text.literal("Failed to remove ban for " + targetEntry.name() + ". Ban entry not found or invalid."));
+					return 0;
+			}
 		} else {
 			ServerPlayerEntity target = source.getServer().getPlayerManager().getPlayer(targetEntry.id());
 			if (target != null) {

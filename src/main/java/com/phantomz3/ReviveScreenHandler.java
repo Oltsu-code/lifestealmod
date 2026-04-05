@@ -126,8 +126,15 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 		}
 
 		if (config.banPlayersOnElimination) {
-			var bannedList = server.getPlayerManager().getUserBanList();
-			bannedList.remove(targetEntry);
+			BannedPlayerList bannedList = server.getPlayerManager().getUserBanList();
+			if (LifestealMod.validateLifestealBan(server, targetEntry)) {
+				bannedList.remove(targetEntry);
+				LifestealMod.pendingRevives.add(targetEntry.id());
+				LifestealMod.saveRevives();
+			} else {
+				reviver.sendMessage(Text.literal("Failed to remove ban for " + targetEntry.name() + ". Ban entry not found or invalid.").formatted(Formatting.RED), true);
+				return false;
+			}
 		}
 
 		LifestealMod.eliminatedPlayers.remove(targetEntry.id());

@@ -197,9 +197,22 @@ public class LifestealMod implements ModInitializer {
 				Text.of("View Recipes")));
 	}
 
-	public static boolean validateLifestealBan(BannedPlayerEntry entry) {
-		if (entry.getReason().equals(REVIVE_BAN_REASON) && entry.getSource().equals(MOD_ID)) return true;
-		return false;
+	public static boolean validateLifestealBan(MinecraftServer server, PlayerConfigEntry playerEntry) {
+		BannedPlayerList bannedList = server.getPlayerManager().getUserBanList();
+		BannedPlayerEntry bannedPlayerEntry = null;
+		for (BannedPlayerEntry entry : bannedList.values()) {
+			if (entry.getKey().id().equals(playerEntry.id())) {
+				bannedPlayerEntry = entry;
+				break;
+			}
+		}
+
+		if (bannedPlayerEntry == null) {
+			return false;
+		}
+
+        return bannedPlayerEntry.getReason().equals(REVIVE_BAN_REASON)
+                && bannedPlayerEntry.getSource().equals(MOD_ID);
 	}
 
 	private void placeRecipeItems(SimpleInventory inventory, String[] pattern, int startRow, int startCol,
