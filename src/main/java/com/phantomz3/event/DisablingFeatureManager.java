@@ -4,6 +4,7 @@ import com.phantomz3.LifestealMod;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.block.RespawnAnchorBlock;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
@@ -15,6 +16,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.World;
+
 
 import com.phantomz3.ModConfig;
 import me.shedaniel.autoconfig.AutoConfig;
@@ -38,6 +40,10 @@ public class DisablingFeatureManager {
 
 		if (config.noDragonEggEnderChest) {
 			registerDragonEggEnderChestDisable();
+		}
+
+		if (config.disableEnderPearl) {
+			registerDisableEnderPearl();
 		}
 	}
 
@@ -133,6 +139,18 @@ public class DisablingFeatureManager {
 					}
 				}
 			});
+		});
+	}
+
+	private void registerDisableEnderPearl() {
+		UseItemCallback.EVENT.register((player, world, hand) -> {
+			if (player.getStackInHand(hand).getItem() == Items.ENDER_PEARL) {
+				player.sendMessage(
+						Text.literal("Ender pearls are disabled on this server!").formatted(Formatting.RED),
+						true);
+				return ActionResult.FAIL;
+			}
+			return ActionResult.PASS;
 		});
 	}
 
