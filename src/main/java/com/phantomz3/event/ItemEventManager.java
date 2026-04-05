@@ -41,7 +41,6 @@ public class ItemEventManager {
 	public void register() {
 		registerHeartItemUsage();
 		registerReviveBeaconUsage();
-		registerEnderPearlDisable();
 		registerRiptideCooldown();
 	}
 
@@ -95,21 +94,6 @@ public class ItemEventManager {
 		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
 			ItemStack itemStack = player.getStackInHand(hand);
 			return mod.isReviveBeacon(itemStack) ? ActionResult.FAIL : ActionResult.PASS;
-		});
-	}
-
-	private void registerEnderPearlDisable() {
-		UseItemCallback.EVENT.register((player, world, hand) -> {
-			ItemStack itemStack = player.getStackInHand(hand);
-
-			if (itemStack.getItem() == Items.ENDER_PEARL) {
-				player.sendMessage(
-						Text.literal("Ender pearls are disabled on this server!").formatted(Formatting.RED),
-						true);
-				return ActionResult.FAIL;
-			}
-
-			return ActionResult.PASS;
 		});
 	}
 

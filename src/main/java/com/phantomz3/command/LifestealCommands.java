@@ -173,21 +173,12 @@ public class LifestealCommands {
 		String playerName = StringArgumentType.getString(context, "player");
 		ServerCommandSource source = context.getSource();
 		MinecraftServer server = source.getServer();
-		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
-
-		System.out.println("Eliminated Players: " + eliminatedPlayers);
 
 		PlayerConfigEntry targetEntry = null;
+		GameProfile profile = server.getApiServices().profileResolver().getProfileByName(playerName).orElse(null);
 
-		for (UUID uuid : LifestealMod.eliminatedPlayers) {
-			GameProfile profile = server.getApiServices().profileResolver().getProfileByName(playerName).orElse(null);
-			System.out.println("Profile: " + profile);
-			System.out.println("PlayerName: " + playerName);
-			if (profile != null && profile.name().equalsIgnoreCase(playerName)) {
-				targetEntry = new PlayerConfigEntry(profile);
-				System.out.println("Target Entry: " + targetEntry.name() + " " + targetEntry.id());
-				break;
-			}
+		if (profile != null && LifestealMod.eliminatedPlayers.contains(profile.id())) {
+			targetEntry = new PlayerConfigEntry(profile);
 		}
 
 		if (targetEntry == null) {

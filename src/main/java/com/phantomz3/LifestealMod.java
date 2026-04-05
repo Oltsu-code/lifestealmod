@@ -211,8 +211,8 @@ public class LifestealMod implements ModInitializer {
 			return false;
 		}
 
-        return bannedPlayerEntry.getReason().equals(REVIVE_BAN_REASON)
-                && bannedPlayerEntry.getSource().equals(MOD_ID);
+		return Objects.equals(bannedPlayerEntry.getReason(), REVIVE_BAN_REASON)
+				&& Objects.equals(bannedPlayerEntry.getSource(), MOD_ID);
 	}
 
 	private void placeRecipeItems(SimpleInventory inventory, String[] pattern, int startRow, int startCol,

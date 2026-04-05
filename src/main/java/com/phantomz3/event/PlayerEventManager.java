@@ -9,6 +9,7 @@ import net.minecraft.server.BannedPlayerEntry;
 import net.minecraft.server.BannedPlayerList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.world.GameMode;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -16,6 +17,7 @@ import net.minecraft.util.Formatting;
 import com.phantomz3.LifestealMod;
 import com.phantomz3.ModConfig;
 import me.shedaniel.autoconfig.AutoConfig;
+import net.minecraft.world.rule.GameRules;
 
 public class PlayerEventManager {
 
@@ -146,7 +148,9 @@ public class PlayerEventManager {
 	private void eliminatePlayer(PlayerEntity player) {
 		ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
 		serverPlayer.changeGameMode(GameMode.SPECTATOR);
-		player.getInventory().dropAll();
+		if (!player.getEntityWorld().getServer().getOverworld().getGameRules().getValue(GameRules.KEEP_INVENTORY)) {
+			player.getInventory().dropAll();
+		}
 
 		ModConfig config = getConfig();
 
