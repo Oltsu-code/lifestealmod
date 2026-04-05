@@ -27,8 +27,6 @@ import net.minecraft.world.GameMode;
 import java.util.Collection;
 import java.util.UUID;
 
-import static com.phantomz3.LifestealMod.*;
-
 public class LifestealCommands {
 
 	private final LifestealMod mod;
@@ -192,16 +190,16 @@ public class LifestealCommands {
 	public int executeRevive(ServerCommandSource source, PlayerConfigEntry targetEntry) {
 		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
 
-		if (!eliminatedPlayers.contains(targetEntry.id())) {
+		if (!LifestealMod.eliminatedPlayers.contains(targetEntry.id())) {
 			source.sendError(Text.literal("This player is not eliminated."));
 			return 0;
 		}
 
 		if (config.banPlayersOnElimination) {
 			var bannedList = source.getServer().getPlayerManager().getUserBanList();
-			if (validateLifestealBan(source.getServer(), targetEntry)) {
+			if (LifestealMod.validateLifestealBan(source.getServer(), targetEntry)) {
 				bannedList.remove(targetEntry);
-				pendingRevives.add(targetEntry.id());
+				LifestealMod.pendingRevives.add(targetEntry.id());
 			} else {
 				source.sendError(Text.literal("Failed to remove ban for " + targetEntry.name() + ". Ban entry not found or invalid."));
 					return 0;
@@ -214,13 +212,13 @@ public class LifestealCommands {
 				target.setHealth(config.heartsAfterRevive * 2.0f);
 				target.sendMessage(Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN), false);
 			} else {
-				pendingRevives.add(targetEntry.id());
+				LifestealMod.pendingRevives.add(targetEntry.id());
 			}
 		}
 
-		eliminatedPlayers.remove(targetEntry.id());
-		saveEliminated();
-		saveRevives();
+		LifestealMod.eliminatedPlayers.remove(targetEntry.id());
+		LifestealMod.saveEliminated();
+		LifestealMod.saveRevives();
 
 		source.sendFeedback(() -> Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
 		return 1;
