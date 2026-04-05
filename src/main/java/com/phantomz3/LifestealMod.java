@@ -31,8 +31,6 @@ public class LifestealMod implements ModInitializer {
 	public static final Set<UUID> pendingRevives = new HashSet<>();
 
 	public static final String REVIVE_BAN_REASON = "Losing all hearts ban";
-	private static final double HEART_VALUE = 2.0;
-	private static final double MIN_HEALTH = 2.0;
 	private static final String HEART_ITEM_NAME = "Heart";
 	private static final String REVIVE_BEACON_NAME = "Revive Beacon";
 
@@ -72,12 +70,12 @@ public class LifestealMod implements ModInitializer {
 
 	public void increasePlayerHealth(PlayerEntity player) {
 		double currentMaxHealth = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
-		player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(currentMaxHealth + HEART_VALUE);
+		player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(currentMaxHealth + 2.0);
 	}
 
 	public void decreasePlayerHealth(PlayerEntity player) {
 		double currentMaxHealth = player.getAttributeBaseValue(EntityAttributes.MAX_HEALTH);
-		double newMaxHealth = Math.max(MIN_HEALTH, currentMaxHealth - HEART_VALUE);
+		double newMaxHealth = Math.max(2.0, currentMaxHealth - 2.0);
 		player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
 	}
 
@@ -146,7 +144,7 @@ public class LifestealMod implements ModInitializer {
 		for (int i = 0; i < inventory.size(); i++) {
 			if (inventory.getStack(i).isEmpty()) {
 				ItemStack glassPane = new ItemStack(Items.GRAY_STAINED_GLASS_PANE);
-				glassPane.set(DataComponentTypes.ITEM_NAME, Text.literal("Empty"));
+				glassPane.set(DataComponentTypes.ITEM_NAME, Text.literal(" "));
 				inventory.setStack(i, glassPane);
 			}
 		}
