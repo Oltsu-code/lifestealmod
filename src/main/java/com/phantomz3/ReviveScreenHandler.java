@@ -19,97 +19,126 @@ import net.minecraft.util.Formatting;
 
 public class ReviveScreenHandler extends GenericContainerScreenHandler {
 
-    public ReviveScreenHandler(int syncId, PlayerInventory playerInventory, SimpleInventory inventory) {
-        super(ScreenHandlerType.GENERIC_9X3, syncId, playerInventory, inventory, 3);
-    }
+	private static final String REVIVE_BEACON_NAME = "Revive Beacon";
 
-    @Override
-    public boolean canUse(PlayerEntity player) {
-        return true;
-    }
+	public ReviveScreenHandler(int syncId, PlayerInventory playerInventory, SimpleInventory inventory) {
+		super(ScreenHandlerType.GENERIC_9X3, syncId, playerInventory, inventory, 3);
+	}
 
-    @Override
-    public boolean canInsertIntoSlot(ItemStack stack, Slot slot) {
-        return false;
-    }
+	@Override
+	public boolean canUse(PlayerEntity player) {
+		return true;
+	}
 
-    @Override
-    public void onSlotClick(int slotId, int button, SlotActionType actionType, PlayerEntity player) {
-        if (slotId < 0 || slotId >= this.slots.size()) {
-            super.onSlotClick(slotId, button, actionType, player);
-            return;
-        }
+	@Override
+	public boolean canInsertIntoSlot(ItemStack stack, Slot slot) {
+		return false;
+	}
 
-        ItemStack clickedStack = this.slots.get(slotId).getStack();
+	@Override
+	public void onSlotClick(int slotId, int button, SlotActionType actionType, PlayerEntity player) {
+		if (isInvalidSlotId(slotId)) {
+			super.onSlotClick(slotId, button, actionType, player);
+			return;
+		}
 
-        if (clickedStack.getItem() == Items.PLAYER_HEAD) {
-            String playerName = clickedStack.get(DataComponentTypes.ITEM_NAME).getString();
+		ItemStack clickedStack = this.slots.get(slotId).getStack();
 
-            BannedPlayerList bannedPlayerList = player.getEntityWorld().getServer()
-                    .getPlayerManager().getUserBanList();
+		if (isPlayerHead(clickedStack)) {
+			handlePlayerHeadClick((ServerPlayerEntity) player, clickedStack, slotId);
+		} else if (isGlassPane(clickedStack)) {
+			((ServerPlayerEntity) player).closeHandledScreen();
+		}
 
-            PlayerConfigEntry targetEntry = null;
-            for (BannedPlayerEntry entry : bannedPlayerList.values()) {
-                if (entry.getKey().name().equalsIgnoreCase(playerName)) {
-                    targetEntry = entry.getKey();
-                    break;
-                }
-            }
+		super.onSlotClick(slotId, button, actionType, player);
+	}
 
-            if (targetEntry != null) {
-                int result = executeRevive_((ServerPlayerEntity) player, targetEntry);
-                if (result == 1) {
-                    this.slots.get(slotId).setStack(ItemStack.EMPTY);
-                    this.sendContentUpdates();
-                    ((ServerPlayerEntity) player).closeHandledScreen();
-                }
-            }
-        }
+	private boolean isInvalidSlotId(int slotId) {
+		return slotId < 0 || slotId >= this.slots.size();
+	}
 
-        if (clickedStack.getItem() == Items.GRAY_STAINED_GLASS_PANE) {
-            ((ServerPlayerEntity) player).closeHandledScreen();
-        }
+	private boolean isPlayerHead(ItemStack stack) {
+		return stack.getItem() == Items.PLAYER_HEAD;
+	}
 
-        super.onSlotClick(slotId, button, actionType, player);
-    }
+	private boolean isGlassPane(ItemStack stack) {
+		return stack.getItem() == Items.GRAY_STAINED_GLASS_PANE;
+	}
 
-    private int executeRevive_(ServerPlayerEntity reviver, PlayerConfigEntry targetEntry) {
-        BannedPlayerList bannedPlayerList = reviver.getEntityWorld().getServer()
-                .getPlayerManager().getUserBanList();
+	private void handlePlayerHeadClick(ServerPlayerEntity reviver, ItemStack playerHead, int slotId) {
+		String playerName = playerHead.get(DataComponentTypes.ITEM_NAME).getString();
+		PlayerConfigEntry targetEntry = findBannedPlayer(reviver, playerName);
 
-        if (!bannedPlayerList.contains(targetEntry)) {
-            reviver.sendMessage(Text.literal("This player is not banned.").formatted(Formatting.RED), true);
-            return 0;
-        }
+		if (targetEntry == null) {
+			reviver.sendMessage(Text.literal("Player not found in ban list.").formatted(Formatting.RED), true);
+			return;
+		}
 
-        boolean hasBeacon = false;
-        for (int i = 0; i < reviver.getInventory().size(); i++) {
-            ItemStack stack = reviver.getInventory().getStack(i);
-            if (stack.getItem() == Items.BEACON && stack.hasGlint()
-                    && stack.getName().getString().equals("Revive Beacon")) {
-                hasBeacon = true;
-                break;
-            }
-        }
-        if (!hasBeacon) {
-            reviver.sendMessage(Text.literal("You need a Revive Beacon to revive players!").formatted(Formatting.RED), true);
-            return 0;
-        }
+		if (attemptRevive(reviver, targetEntry)) {
+			this.slots.get(slotId).setStack(ItemStack.EMPTY);
+			this.sendContentUpdates();
+			reviver.closeHandledScreen();
+		}
+	}
 
-        bannedPlayerList.remove(targetEntry);
-        LifestealMod.pendingRevives.add(targetEntry.id());
+	private PlayerConfigEntry findBannedPlayer(ServerPlayerEntity reviver, String playerName) {
+		BannedPlayerList bannedList = reviver.getEntityWorld().getServer().getPlayerManager().getUserBanList();
 
-        reviver.sendMessage(Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
+		for (BannedPlayerEntry entry : bannedList.values()) {
+			if (entry.getKey().name().equalsIgnoreCase(playerName)) {
+				return entry.getKey();
+			}
+		}
 
-        for (int i = 0; i < reviver.getInventory().size(); i++) {
-            ItemStack stack = reviver.getInventory().getStack(i);
-            if (stack.getItem() == Items.BEACON && stack.hasGlint()
-                    && stack.getName().getString().equals("Revive Beacon")) {
-                stack.decrement(1);
-                break;
-            }
-        }
+		return null;
+	}
 
-        return 1;
-    }
+	private boolean attemptRevive(ServerPlayerEntity reviver, PlayerConfigEntry targetEntry) {
+		BannedPlayerList bannedList = reviver.getEntityWorld().getServer().getPlayerManager().getUserBanList();
+
+		if (!bannedList.contains(targetEntry)) {
+			reviver.sendMessage(Text.literal("This player is not banned.").formatted(Formatting.RED), true);
+			return false;
+		}
+
+		if (!hasReviveBeacon(reviver)) {
+			reviver.sendMessage(Text.literal("You need a Revive Beacon to revive players!").formatted(Formatting.RED), true);
+			return false;
+		}
+
+		// perform revive
+		bannedList.remove(targetEntry);
+		LifestealMod.pendingRevives.add(targetEntry.id());
+		consumeReviveBeacon(reviver);
+
+		reviver.sendMessage(Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
+		return true;
+	}
+
+	private boolean hasReviveBeacon(ServerPlayerEntity player) {
+		for (int i = 0; i < player.getInventory().size(); i++) {
+			ItemStack stack = player.getInventory().getStack(i);
+			if (isReviveBeacon(stack)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void consumeReviveBeacon(ServerPlayerEntity player) {
+		for (int i = 0; i < player.getInventory().size(); i++) {
+			ItemStack stack = player.getInventory().getStack(i);
+			if (isReviveBeacon(stack)) {
+				stack.decrement(1);
+				break;
+			}
+		}
+	}
+
+	private boolean isReviveBeacon(ItemStack stack) {
+		return stack.getItem() == Items.BEACON
+			&& stack.hasGlint()
+			&& stack.getName().getString().equals(REVIVE_BEACON_NAME);
+	}
 }
+
