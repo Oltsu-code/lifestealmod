@@ -50,19 +50,25 @@ You can edit the mod config by going into the `config` directory and then openin
 ```json
 {
   "maxHeartCap": 40,
+  "banPlayersOnElimination": false,
+  "heartsAfterRevive": 3,
   "disableEnderPearl": true,
   "disableCPVP": true,
   "disableTotem": true,
   "disableNetherite": true,
   "noDragonEggEnderChest": true,
   "riptideCooldown": 200,
-  "riptideCooldownEnabled": true
-  "healPlayerOnWithdraw": false"
+  "riptideCooldownEnabled": true,
+  "healPlayerOnWithdraw": false,
+  "maxSharpnessLevel": 4,
+  "maxProtectionLevel": 3
 }
 ```
 
 #### Config explained:
 - **maxHeartCap**: Sets the maximum number of health points (HP) a player can have. Default is 40 HP (20 hearts).
+- **banPlayersOnElimination**: If set to `true`, players will be banned from the server when they lose all their hearts. If set to `false`, they will be put in spectator mode instead.
+- **heartsAfterRevive**: Sets the number of hearts a player will have after being revived using the revive beacon.
 - **disableEnderPearl**: Disables the use of ender pearls when set to `true`.~~~~
 - **disableCPVP**: Disables crystal pvp when set to `true`.
 - **disableTotem**: Prevents the use of Totems of Undying when set to `true`.
@@ -71,6 +77,8 @@ You can edit the mod config by going into the `config` directory and then openin
 - **riptideCooldown**: Configurable cooldown for the trident (in ticks).
 - **riptideCooldownEnabled**: Enables riptide cooldown when set to `true`.
 - **healPlayerOnWithdraw**: Heals the player when running the command /lifesteal withdraw when set to `true`.
+- **maxSharpnessLevel**: Sets the maximum level of sharpness enchantment that can be applied to an item.
+- **maxProtectionLevel**: Sets the maximum level of protection enchantment that can be applied to an item.
 
 ## License
 
