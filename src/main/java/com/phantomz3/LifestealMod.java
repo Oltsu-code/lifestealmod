@@ -1,6 +1,10 @@
 package com.phantomz3;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import me.shedaniel.autoconfig.AutoConfig;
 import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
@@ -29,6 +33,7 @@ public class LifestealMod implements ModInitializer {
 	public static final String MOD_ID = "lifestealmod";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 	public static final Set<UUID> pendingRevives = new HashSet<>();
+	private static final Path REVIVE_FILE = Path.of("lifesteal_revives.txt");
 
 	public static final String REVIVE_BAN_REASON = "Losing all hearts ban";
 	private static final String HEART_ITEM_NAME = "Heart";
@@ -48,6 +53,8 @@ public class LifestealMod implements ModInitializer {
 		itemEventManager.register();
 		disablingFeatureManager.register();
 		lifeStealCommands.register();
+
+		loadRevives();
 	}
 
 	private void registerConfig() {
@@ -106,9 +113,32 @@ public class LifestealMod implements ModInitializer {
 
 		bannedList.remove(targetEntry);
 		pendingRevives.add(targetEntry.id());
+		LifestealMod.saveRevives();
 
 		source.sendFeedback(() -> Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
 		return 1;
+	}
+
+	public static void saveRevives() {
+		try {
+			Files.writeString(REVIVE_FILE,
+					pendingRevives.stream().map(UUID::toString).collect(Collectors.joining("\n")));
+		} catch (IOException e) {
+			LOGGER.error("Failed to save pending revives", e);
+		}
+	}
+
+	public static void loadRevives() {
+		if (!Files.exists(REVIVE_FILE)) return;
+		try {
+			String content = Files.readString(REVIVE_FILE);
+			if (content.isBlank()) return;
+			for (String line : content.split("\n")) {
+				pendingRevives.add(UUID.fromString(line.trim()));
+			}
+		} catch (IOException e) {
+			LOGGER.error("Failed to load pending revives", e);
+		}
 	}
 
 	public void openRecipeGUI(ServerPlayerEntity player) {

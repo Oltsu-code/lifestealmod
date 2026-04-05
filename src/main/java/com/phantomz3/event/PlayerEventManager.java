@@ -40,6 +40,7 @@ public class PlayerEventManager {
 				joined.sendMessage(
 						Text.literal("You have been revived! Welcome back.").formatted(Formatting.GREEN),
 						false);
+				LifestealMod.saveRevives();
 			}
 		});
 	}

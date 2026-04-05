@@ -109,6 +109,7 @@ public class ReviveScreenHandler extends GenericContainerScreenHandler {
 		// perform revive
 		bannedList.remove(targetEntry);
 		LifestealMod.pendingRevives.add(targetEntry.id());
+		LifestealMod.saveRevives();
 		consumeReviveBeacon(reviver);
 
 		reviver.sendMessage(Text.literal(targetEntry.name() + " has been revived!").formatted(Formatting.GREEN), true);
