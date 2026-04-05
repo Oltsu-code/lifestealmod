@@ -15,5 +15,6 @@ public class ModConfig implements ConfigData {
     public int riptideCooldown = 200; // 200 ticks = 10 seconds
     public boolean riptideCooldownEnabled = true;
     public boolean healPlayerOnWithdraw = false;
-
+    public int maxSharpnessLevel = 4;
+    public int maxProtectionLevel = 3;
 }

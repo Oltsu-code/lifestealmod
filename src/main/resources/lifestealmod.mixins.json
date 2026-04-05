@@ -3,7 +3,8 @@
 	"package": "com.phantomz3.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin"
+		"EnchantmentHelperMixin",
+		"AnvilScreenHandlerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
